@@ -63,52 +63,52 @@ public class TestApplication {
   @Test
   public void testApp() throws Exception {
 
-    // Instantiate a type factory for creating types (e.g., VARCHAR, NUMERIC, etc.)
+    // Instancia um Factory para os Tipos de Dados (VARCHAR, NUMERIC, etc...)
     RelDataTypeFactory typeFactory = new JavaTypeFactoryImpl();
 
-    // Create the root schema describing the data model
+    // Cria o Esquema Raiz que Descreve o Modelo de Dados
     CalciteSchema schema = CalciteSchema.createRootSchema(true);
 
-    // Define type for authors table
+    // Define os Tipos de Dados para a Tabela authors
     RelDataTypeFactory.Builder authorType = new RelDataTypeFactory.Builder(typeFactory);
       authorType.add("id", SqlTypeName.INTEGER);
       authorType.add("firstname", SqlTypeName.VARCHAR);
       authorType.add("lastname", SqlTypeName.VARCHAR);
 
-    // Initialize authors table with data
+    // Inicializa a Tabela authors com os Dados
     ListTable authorsTable = new ListTable(authorType.build(), AUTHOR_DATA);
 
-    // Add authors table to the schema
+    // Adiciona a Tabela authors para o Schema
     schema.add("author", authorsTable);
 
-    // Define type for books table
+    // Define os Tipos de Dados para a Tabela books
     RelDataTypeFactory.Builder bookType = new RelDataTypeFactory.Builder(typeFactory);
-    bookType.add("id", SqlTypeName.INTEGER);
-    bookType.add("title", SqlTypeName.VARCHAR);
-    bookType.add("year", SqlTypeName.INTEGER);
-    bookType.add("author", SqlTypeName.INTEGER);
+      bookType.add("id", SqlTypeName.INTEGER);
+      bookType.add("title", SqlTypeName.VARCHAR);
+      bookType.add("year", SqlTypeName.INTEGER);
+      bookType.add("author", SqlTypeName.INTEGER);
 
-    // Initialize books table with data
+    // Inicializa a Tabela books com os Dados
     ListTable booksTable = new ListTable(bookType.build(), BOOK_DATA);
 
-    // Add books table to the schema
-    schema.add("book", booksTable);
+    // Adiciona a Tabela books para o Schema
+    schema.add("books", booksTable);
 
-    // Create an SQL parser
+    // Cria um SQL Parser
     SqlParser parser = SqlParser.create(
         "SELECT b.id, b.title, b.\"year\", a.firstname || ' ' || a.lastname \n"
-            + "FROM Book b\n"
+            + "FROM Books b\n"
             + "LEFT OUTER JOIN Author a ON b.author=a.id\n"
             + "WHERE b.\"year\" > 1830\n"
             + "ORDER BY b.id\n"
             + "LIMIT 5");
 
-    // Parse the query into an AST
+    // Analisa a Consulta em um AST
     SqlNode sqlNode = parser.parseQuery();
 
-    // Configure and instantiate validator
+    // Configura e Instancia o Validador
     Properties props = new Properties();
-    props.setProperty(CalciteConnectionProperty.CASE_SENSITIVE.camelName(), "false");
+      props.setProperty(CalciteConnectionProperty.CASE_SENSITIVE.camelName(), "false");
     CalciteConnectionConfig config = new CalciteConnectionConfigImpl(props);
     CalciteCatalogReader catalogReader = new CalciteCatalogReader(schema,
         Collections.singletonList(""),
@@ -118,10 +118,10 @@ public class TestApplication {
         catalogReader, typeFactory,
         SqlValidator.Config.DEFAULT);
 
-    // Validate the initial AST
+    // Valida AST Inicial
     SqlNode validNode = validator.validate(sqlNode);
 
-    // Configure and instantiate the converter of the AST to Logical plan (requires opt cluster)
+    // Configura e Instancia o Conversor do Plano AST para Lógico (Requer opt cluster)
     RelOptCluster cluster = newCluster(typeFactory);
     SqlToRelConverter relConverter = new SqlToRelConverter(
         NOOP_EXPANDER,
@@ -131,45 +131,43 @@ public class TestApplication {
         StandardConvertletTable.INSTANCE,
         SqlToRelConverter.config());
 
-    // Convert the valid AST into a logical plan
+    // Converte o AST Válido em um Plano Lógico
     RelNode logPlan = relConverter.convertQuery(validNode, false, true).rel;
 
-    // Display the logical plan
+    // Mostra o Plano Lógico
     System.out.println(
         RelOptUtil.dumpPlan("[Logical plan]", logPlan, SqlExplainFormat.TEXT,
             SqlExplainLevel.EXPPLAN_ATTRIBUTES));
 
-    // Initialize optimizer/planner with the necessary rules
+    // Inicializa o Otimizador e Planejador com as Regras Necessárias
     RelOptPlanner planner = cluster.getPlanner();
-    planner.addRule(CoreRules.FILTER_INTO_JOIN);
-    planner.addRule(Bindables.BINDABLE_TABLE_SCAN_RULE);
-    planner.addRule(Bindables.BINDABLE_FILTER_RULE);
-    planner.addRule(Bindables.BINDABLE_JOIN_RULE);
-    planner.addRule(Bindables.BINDABLE_PROJECT_RULE);
-    planner.addRule(Bindables.BINDABLE_SORT_RULE);
+      planner.addRule(CoreRules.FILTER_INTO_JOIN);
+      planner.addRule(Bindables.BINDABLE_TABLE_SCAN_RULE);
+      planner.addRule(Bindables.BINDABLE_FILTER_RULE);
+      planner.addRule(Bindables.BINDABLE_JOIN_RULE);
+      planner.addRule(Bindables.BINDABLE_PROJECT_RULE);
+      planner.addRule(Bindables.BINDABLE_SORT_RULE);
 
-    // Define the type of the output plan (in this case we want a physical plan in
-    // BindableConvention)
+    // Define o Tipo de Plano de Saída (Neste Caso Queremos um Plano Físico em BindConvention)
     logPlan = planner.changeTraits(logPlan,
         cluster.traitSet().replace(BindableConvention.INSTANCE));
     planner.setRoot(logPlan);
 
-    // Start the optimization process to obtain the most efficient physical plan based on the
-    // provided rule set.
+    // Inicia o Processo de Otimização para Obter o Plano Físico Mais Eficiente com Base no Conjunto de Regras Fornecido
     BindableRel phyPlan = (BindableRel) planner.findBestExp();
 
-    // Display the physical plan
+    // Mostra o Plano Físico
     System.out.println(
         RelOptUtil.dumpPlan("[Physical plan]", phyPlan, SqlExplainFormat.TEXT,
             SqlExplainLevel.NON_COST_ATTRIBUTES));
 
-    // Run the executable plan using a context simply providing access to the schema
+    // Executa o Plano Executável Usando um Contexto que Fornece Acesso ao Esquema
     for (Object[] row : phyPlan.bind(new SchemaOnlyDataContext(schema))) {
       System.out.println(Arrays.toString(row));
     }
   }
 
-  // A simple table based on a list
+  // Uma Tabela Baseada Numa Lista
   private static class ListTable extends AbstractTable implements ScannableTable {
     private final RelDataType rowType;
     private final List<Object[]> data;
@@ -197,7 +195,7 @@ public class TestApplication {
   private static final RelOptTable.ViewExpander NOOP_EXPANDER = (rowType, queryString, schemaPath
       , viewPath) -> null;
 
-// A simple data context only with schema information
+// Contexto de Dados com Informações do Schema
   private static final class SchemaOnlyDataContext implements DataContext {
     private final SchemaPlus schema;
 
